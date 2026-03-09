@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { enqueuePipeline, generateScripts, generateTrendCandidates } from "./generators.js";
 import { createPersistence, type PersistenceLayer } from "./persistence.js";
 
-const PORT = Number(process.env.VIRAL_STUDIO_PORT ?? 4317);
+const PORT = Number(process.env.PORT ?? process.env.VIRAL_STUDIO_PORT ?? 4317);
 const HOST = process.env.VIRAL_STUDIO_HOST ?? "127.0.0.1";
 const API_KEY = process.env.VIRAL_STUDIO_API_KEY?.trim() || "";
 
