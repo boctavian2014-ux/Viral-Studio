@@ -4,7 +4,7 @@ import { enqueuePipeline, generateScripts, generateTrendCandidates } from "./gen
 import { createPersistence, type PersistenceLayer } from "./persistence.js";
 
 const PORT = Number(process.env.PORT ?? process.env.VIRAL_STUDIO_PORT ?? 4317);
-const HOST = process.env.VIRAL_STUDIO_HOST ?? "127.0.0.1";
+const HOST = process.env.VIRAL_STUDIO_HOST ?? "0.0.0.0";
 const API_KEY = process.env.VIRAL_STUDIO_API_KEY?.trim() || "";
 
 function writeJson(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -154,7 +154,9 @@ if (import.meta.url === entryUrl) {
   });
 
   server.listen(PORT, HOST, () => {
-    process.stdout.write(`viral-studio-services listening on http://${HOST}:${PORT}\n`);
+    process.stdout.write(
+      `viral-studio-services listening on http://${HOST}:${PORT} (PORT=${String(process.env.PORT ?? "")})\n`,
+    );
   });
 
   void persistence.init().catch((error) => {
