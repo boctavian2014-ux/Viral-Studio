@@ -1,0 +1,29 @@
+{
+  "name": "viral-studio-services",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Railway-deployable backend for an AI short-form content pipeline",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/server.ts",
+    "dev:worker": "tsx src/worker.ts",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/worker.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.23.0",
+  "dependencies": {
+    "pg": "^8.20.0",
+    "redis": "^5.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
