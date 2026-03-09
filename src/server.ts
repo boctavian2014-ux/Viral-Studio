@@ -140,20 +140,26 @@ const entryUrl = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
 
 if (import.meta.url === entryUrl) {
   const persistence = createPersistence();
-  void persistence.init().finally(() => {
-    const server = createServer(persistence);
-    const shutdown = async () => {
-      server.close();
-      await persistence.close();
-    };
-    process.once("SIGINT", () => {
-      void shutdown();
-    });
-    process.once("SIGTERM", () => {
-      void shutdown();
-    });
-    server.listen(PORT, HOST, () => {
-      process.stdout.write(`viral-studio-services listening on http://${HOST}:${PORT}\n`);
-    });
+  const server = createServer(persistence);
+  const shutdown = async () => {
+    server.close();
+    await persistence.close();
+  };
+
+  process.once("SIGINT", () => {
+    void shutdown();
+  });
+  process.once("SIGTERM", () => {
+    void shutdown();
+  });
+
+  server.listen(PORT, HOST, () => {
+    process.stdout.write(`viral-studio-services listening on http://${HOST}:${PORT}\n`);
+  });
+
+  void persistence.init().catch((error) => {
+    process.stderr.write(
+      `persistence init failed: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
   });
 }
