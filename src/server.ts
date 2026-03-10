@@ -4,7 +4,16 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { enqueuePipeline, generateScripts, generateTrendCandidates } from "./generators.js";
+import {
+  createTopicFlow,
+  enqueueFromInfluencerFlow,
+  runInfluencerFlow,
+} from "./pipeline-flows.js";
 import { createPersistence, type PersistenceLayer } from "./persistence.js";
+import { generateHook } from "./hook-generator.js";
+import { processMetrics } from "./trend-prediction.js";
+import { STYLE_PRESETS } from "./style-profiles.js";
+import { predictViral } from "./viral-prediction.js";
 
 const PORT = Number(process.env.PORT ?? process.env.VIRAL_STUDIO_PORT ?? 4317);
 const HOST = process.env.VIRAL_STUDIO_HOST ?? "0.0.0.0";
@@ -108,6 +117,18 @@ export async function handleRequest(
     return;
   }
 
+  if (req.method === "GET" && req.url?.startsWith("/v1/trend-prediction/alerts")) {
+    writeJson(res, 200, {
+      items: await persistence.readTrendAlerts(parseLimit(req.url)),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/v1/styles/presets") {
+    writeJson(res, 200, { presets: STYLE_PRESETS });
+    return;
+  }
+
   if (req.method !== "POST") {
     writeJson(res, 405, { error: "Method not allowed" });
     return;
@@ -139,6 +160,55 @@ export async function handleRequest(
       const response = enqueuePipeline(body as Parameters<typeof enqueuePipeline>[0]);
       await persistence.enqueueJobs(body as Parameters<typeof enqueuePipeline>[0], response);
       writeJson(res, 200, response);
+      return;
+    }
+
+    if (req.url === "/v1/trend-prediction/ingest") {
+      const { metrics = [] } = body as { metrics?: Parameters<typeof processMetrics>[0] };
+      const alerts = processMetrics(metrics);
+      await persistence.saveTrendAlerts(alerts);
+      writeJson(res, 200, {
+        processed: metrics.length,
+        alertsCreated: alerts.length,
+        alerts,
+      });
+      return;
+    }
+
+    if (req.url === "/v1/viral-prediction/predict") {
+      const { features } = body as { features?: Parameters<typeof predictViral>[0] };
+      const result = await predictViral(features ?? {});
+      writeJson(res, 200, result);
+      return;
+    }
+
+    if (req.url === "/v1/hooks/generate") {
+      const payload = body as Parameters<typeof generateHook>[0];
+      const result = generateHook(payload);
+      writeJson(res, 200, result);
+      return;
+    }
+
+    if (req.url === "/v1/scripts/from-topic") {
+      const response = createTopicFlow(body as Parameters<typeof createTopicFlow>[0]);
+      await persistence.saveScripts({ ideas: response.ideas }, { generatedAt: response.generatedAt, scripts: response.scripts });
+      writeJson(res, 200, response);
+      return;
+    }
+
+    if (req.url === "/v1/influencer/run") {
+      const flow = runInfluencerFlow(body as Parameters<typeof runInfluencerFlow>[0]);
+      await persistence.saveScripts({ ideas: flow.ideas }, { generatedAt: flow.generatedAt, scripts: flow.scripts });
+      const jobs = enqueueFromInfluencerFlow(flow.enqueueRequest);
+      await persistence.enqueueJobs(flow.enqueueRequest, jobs);
+      writeJson(res, 200, {
+        generatedAt: flow.generatedAt,
+        profile: flow.profile,
+        hooks: flow.hooks,
+        ideas: flow.ideas,
+        scripts: flow.scripts,
+        jobs: jobs.jobs,
+      });
       return;
     }
 

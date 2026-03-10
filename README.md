@@ -28,6 +28,38 @@ This service provides:
 - `POST /v1/trends/candidates`
 - `POST /v1/scripts/generate`
 - `POST /v1/pipeline/enqueue`
+- `POST /v1/trend-prediction/ingest` — send raw video metrics; returns trend alerts (score > 80)
+- `POST /v1/viral-prediction/predict` — predict 1M+ viral probability (ML service if configured, otherwise fallback formula)
+- `POST /v1/hooks/generate` — generate hook from topic/category
+- `POST /v1/scripts/from-topic` — topic + category -> hooks + ideas + scripts
+- `POST /v1/influencer/run` — influencer profile -> hooks + ideas + scripts + queued jobs
+
+### Trend Prediction (detect before viral)
+
+- **GET** `/v1/trend-prediction/alerts?limit=25` — list recent trend alerts.
+- **POST** `/v1/trend-prediction/ingest` — body: `{ "metrics": [ { "video_id", "views", "likes", "comments", "shares", "hashtags", "created_at", "views_before?", "minutes_elapsed?" } ] }`. Score = view_velocity×0.4 + engagement×0.3 + hashtag×0.2 + audio×0.1; alerts created when score > 80.
+
+### Viral prediction (1M+ views)
+
+- **POST** `/v1/viral-prediction/predict` — body: `{ "features": { "hook_score", "trend_score", "emotion_score", "curiosity_gap", "video_length", "scene_count", "visual_novelty" } }`. Returns `{ "probability", "estimatedViews", "confidence", "label" }`. Threshold 0.65 = HIGH VIRAL POTENTIAL.
+
+### Hook generator
+
+- **POST** `/v1/hooks/generate` — body: `{ "topic": "AI tools", "category": "curiosity" }`. Returns `{ "hook", "trigger", "topic", "curiosityGap" }`. Categories: curiosity, shock, secret, money, mistake, challenge.
+
+### Creator style presets
+
+- **GET** `/v1/styles/presets` — returns preset styles (fast_storytelling, cinematic, challenge, educational) for script/video generation.
+
+## Optional ML Predictor Service
+
+Set these env vars on API service to use an external ML model endpoint:
+
+- `VIRAL_STUDIO_ML_SERVICE_URL` (example: `https://your-ml-service.up.railway.app` base URL, without `/predict`)
+- `VIRAL_STUDIO_ML_API_KEY` (optional bearer token)
+- `VIRAL_STUDIO_ML_TIMEOUT_MS` (optional, default `3500`)
+
+When ML service is unavailable, API automatically falls back to local formula predictor.
 
 ## Local development
 

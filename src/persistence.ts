@@ -7,6 +7,7 @@ import type {
   ScriptDraft,
   ScriptsGenerateRequest,
   ScriptsGenerateResponse,
+  TrendAlert,
   TrendCandidate,
   TrendCandidatesRequest,
   TrendCandidatesResponse,
@@ -47,6 +48,8 @@ export type PersistenceLayer = {
     jobId: string,
     status: "queued" | "processing" | "completed" | "failed",
   ) => Promise<void>;
+  saveTrendAlerts: (alerts: TrendAlert[]) => Promise<void>;
+  readTrendAlerts: (limit?: number) => Promise<TrendAlert[]>;
 };
 
 type PersistenceOptions = {
@@ -138,6 +141,21 @@ export function createPersistence(options: PersistenceOptions = {}): Persistence
       );
       await pool.query(
         "create index if not exists pipeline_jobs_idea_id_idx on pipeline_jobs (idea_id);",
+      );
+      await pool.query(`
+        create table if not exists trend_alerts (
+          id text primary key,
+          topic text not null,
+          platform text not null,
+          score double precision not null,
+          growth_rate_percent double precision not null,
+          video_id text not null,
+          detected_at timestamptz not null,
+          suggested_hooks jsonb
+        );
+      `);
+      await pool.query(
+        "create index if not exists trend_alerts_detected_at_idx on trend_alerts (detected_at desc);",
       );
       postgresStatus = { status: "connected" };
     } catch (error) {
@@ -360,6 +378,66 @@ export function createPersistence(options: PersistenceOptions = {}): Persistence
         `,
         [jobId, status],
       );
+    },
+    async saveTrendAlerts(alerts) {
+      if (!pool || postgresStatus.status !== "connected") {
+        return;
+      }
+      for (const a of alerts) {
+        await pool.query(
+          `
+            insert into trend_alerts (
+              id, topic, platform, score, growth_rate_percent, video_id, detected_at, suggested_hooks
+            ) values ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::jsonb)
+            on conflict (id) do update set
+              score = excluded.score,
+              growth_rate_percent = excluded.growth_rate_percent;
+          `,
+          [
+            a.id,
+            a.topic,
+            a.platform,
+            a.score,
+            a.growthRatePercent,
+            a.videoId,
+            a.detectedAt,
+            a.suggestedHooks ? JSON.stringify(a.suggestedHooks) : null,
+          ],
+        );
+      }
+    },
+    async readTrendAlerts(limit = 25) {
+      if (!pool || postgresStatus.status !== "connected") {
+        return [];
+      }
+      const result = await pool.query<{
+        id: string;
+        topic: string;
+        platform: string;
+        score: number;
+        growth_rate_percent: number;
+        video_id: string;
+        detected_at: string;
+        suggested_hooks: string[] | null;
+      }>(
+        `
+          select id, topic, platform, score, growth_rate_percent, video_id, detected_at, suggested_hooks
+          from trend_alerts
+          order by detected_at desc
+          limit $1;
+        `,
+        [limit],
+      );
+      return result.rows.map((row: (typeof result.rows)[number]) => ({
+        id: row.id,
+        topic: row.topic,
+        platform: row.platform as TrendAlert["platform"],
+        score: row.score,
+        growthRatePercent: row.growth_rate_percent,
+        videoId: row.video_id,
+        detectedAt: row.detected_at,
+        suggestedHooks: row.suggested_hooks ?? undefined,
+      }));
     },
   };
 }
