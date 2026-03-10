@@ -19,6 +19,14 @@ const PORT = Number(process.env.PORT ?? process.env.VIRAL_STUDIO_PORT ?? 4317);
 const HOST = process.env.VIRAL_STUDIO_HOST ?? "0.0.0.0";
 const API_KEY = process.env.VIRAL_STUDIO_API_KEY?.trim() || "";
 
+const CORS_ORIGIN = process.env.VIRAL_STUDIO_CORS_ORIGIN?.trim() || "*";
+
+function setCors(res: ServerResponse): void {
+  res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
+}
+
 function writeJson(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -76,6 +84,13 @@ export async function handleRequest(
   res: ServerResponse,
   persistence: PersistenceLayer,
 ): Promise<void> {
+  setCors(res);
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
   if (req.method === "GET" && (req.url === "/" || req.url === "/dashboard" || req.url?.startsWith("/dashboard"))) {
     if (existsSync(DASHBOARD_PATH)) {
       const html = readFileSync(DASHBOARD_PATH, "utf8");
