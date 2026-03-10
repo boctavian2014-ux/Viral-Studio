@@ -60,9 +60,17 @@ function stringifyError(error: unknown): string {
 }
 
 export function createPersistence(options: PersistenceOptions = {}): PersistenceLayer {
+  // Prefer explicit config, then our env name, then Railway's default from attached Postgres/Redis
   const databaseUrl =
-    options.databaseUrl?.trim() || process.env.VIRAL_STUDIO_DATABASE_URL?.trim() || "";
-  const redisUrl = options.redisUrl?.trim() || process.env.VIRAL_STUDIO_REDIS_URL?.trim() || "";
+    options.databaseUrl?.trim() ||
+    process.env.VIRAL_STUDIO_DATABASE_URL?.trim() ||
+    process.env.DATABASE_URL?.trim() ||
+    "";
+  const redisUrl =
+    options.redisUrl?.trim() ||
+    process.env.VIRAL_STUDIO_REDIS_URL?.trim() ||
+    process.env.REDIS_URL?.trim() ||
+    "";
   const queueKey =
     options.queueKey?.trim() ||
     process.env.VIRAL_STUDIO_QUEUE_KEY?.trim() ||

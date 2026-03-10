@@ -139,6 +139,13 @@ export function createServer(persistence: PersistenceLayer = createPersistence()
 const entryUrl = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
 
 if (import.meta.url === entryUrl) {
+  const dbEnv =
+    process.env.VIRAL_STUDIO_DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim() || "";
+  const redisEnv =
+    process.env.VIRAL_STUDIO_REDIS_URL?.trim() || process.env.REDIS_URL?.trim() || "";
+  process.stdout.write(
+    `env: DATABASE_URL=${dbEnv ? "set" : "not set"}, REDIS_URL=${redisEnv ? "set" : "not set"}\n`,
+  );
   const persistence = createPersistence();
   const server = createServer(persistence);
   const shutdown = async () => {
