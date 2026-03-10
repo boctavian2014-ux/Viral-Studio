@@ -1,5 +1,8 @@
+import { readFileSync, existsSync } from "node:fs";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { enqueuePipeline, generateScripts, generateTrendCandidates } from "./generators.js";
 import { createPersistence, type PersistenceLayer } from "./persistence.js";
 
@@ -52,11 +55,28 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(raw);
 }
 
+const DASHBOARD_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "public",
+  "dashboard.html",
+);
+
 export async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   persistence: PersistenceLayer,
 ): Promise<void> {
+  if (req.method === "GET" && (req.url === "/" || req.url === "/dashboard" || req.url?.startsWith("/dashboard"))) {
+    if (existsSync(DASHBOARD_PATH)) {
+      const html = readFileSync(DASHBOARD_PATH, "utf8");
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.end(html);
+      return;
+    }
+  }
+
   if (req.method === "GET" && req.url === "/health") {
     writeJson(res, 200, { ok: true, persistence: persistence.health() });
     return;

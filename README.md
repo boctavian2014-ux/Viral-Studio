@@ -17,6 +17,7 @@ This service provides:
 
 ### GET
 
+- `GET /` or `GET /dashboard` — serves the **dashboard UI** (HTML). Use it to check health, list recent trends/scripts/jobs, and trigger POST actions.
 - `GET /health`
 - `GET /v1/trends/recent?limit=25`
 - `GET /v1/scripts/recent?limit=25`

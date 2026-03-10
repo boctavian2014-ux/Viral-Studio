@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Viral Studio</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1f;
+      --border: #2a2a32;
+      --text: #e4e4e7;
+      --muted: #71717a;
+      --accent: #a78bfa;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1rem 1.5rem;
+      line-height: 1.5;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 1rem; color: var(--accent); }
+    h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; color: var(--muted); font-weight: 600; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    input[type="password"], input[type="text"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      width: 20rem;
+      max-width: 100%;
+    }
+    button {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .status { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
+    .status.connected { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+    .status.disabled { background: rgba(113, 113, 122, 0.3); color: var(--muted); }
+    .status.error { background: rgba(239, 68, 68, 0.2); color: var(--error); }
+    pre, .code { font-family: ui-monospace, monospace; font-size: 0.8rem; overflow-x: auto; }
+    .empty { color: var(--muted); font-style: italic; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; }
+    .err { color: var(--error); }
+    .loading { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>Viral Studio</h1>
+
+  <section>
+    <h2>API Key (optional)</h2>
+    <div class="row">
+      <input type="password" id="apiKey" placeholder="Leave empty if not set on server" />
+      <button type="button" id="saveKey">Save</button>
+    </div>
+    <p class="muted" style="font-size: 0.85rem; margin: 0.25rem 0 0;">Stored in browser only. Used for GET/POST to this API.</p>
+  </section>
+
+  <section>
+    <h2>Health</h2>
+    <div class="row">
+      <button type="button" id="refreshHealth">Refresh</button>
+      <span id="healthStatus" class="loading">—</span>
+    </div>
+    <pre id="healthJson" style="margin: 0.5rem 0 0; font-size: 0.8rem; white-space: pre-wrap;"></pre>
+  </section>
+
+  <section>
+    <h2>Recent trends</h2>
+    <div class="row">
+      <button type="button" id="loadTrends">Load</button>
+      <button type="button" id="fetchTrends" class="secondary">POST Fetch candidates</button>
+    </div>
+    <div id="trendsList"></div>
+  </section>
+
+  <section>
+    <h2>Recent scripts</h2>
+    <div class="row">
+      <button type="button" id="loadScripts">Load</button>
+      <button type="button" id="generateScripts" class="secondary">POST Generate</button>
+    </div>
+    <div id="scriptsList"></div>
+  </section>
+
+  <section>
+    <h2>Pipeline jobs</h2>
+    <div class="row">
+      <button type="button" id="loadJobs">Load</button>
+      <button type="button" id="enqueuePipeline" class="secondary">POST Enqueue</button>
+    </div>
+    <div id="jobsList"></div>
+  </section>
+
+  <script>
+    const STORAGE_KEY = 'viral-studio-api-key';
+    function getHeaders() {
+      const key = localStorage.getItem(STORAGE_KEY) || '';
+      const h = { 'Content-Type': 'application/json' };
+      if (key) h['Authorization'] = 'Bearer ' + key;
+      return h;
+    }
+    function getApiKey() { return document.getElementById('apiKey').value.trim(); }
+    document.getElementById('saveKey').onclick = () => {
+      const v = getApiKey();
+      if (v) localStorage.setItem(STORAGE_KEY, v);
+      else localStorage.removeItem(STORAGE_KEY);
+      document.getElementById('apiKey').value = '';
+      document.getElementById('apiKey').placeholder = v ? 'Saved (hidden)' : 'Leave empty if not set on server';
+    };
+    if (localStorage.getItem(STORAGE_KEY)) document.getElementById('apiKey').placeholder = 'Saved (hidden)';
+
+    async function fetchHealth() {
+      const el = document.getElementById('healthStatus');
+      const pre = document.getElementById('healthJson');
+      el.textContent = 'Loading…';
+      pre.textContent = '';
+      try {
+        const r = await fetch('/health');
+        const j = await r.json();
+        pre.textContent = JSON.stringify(j, null, 2);
+        const p = j.persistence || {};
+        const pg = (p.postgres || {}).status;
+        const rd = (p.redis || {}).status;
+        el.innerHTML = 'Postgres: <span class="status ' + (pg === 'connected' ? 'connected' : pg === 'error' ? 'error' : 'disabled') + '">' + (pg || '—') + '</span> Redis: <span class="status ' + (rd === 'connected' ? 'connected' : rd === 'error' ? 'error' : 'disabled') + '">' + (rd || '—') + '</span>';
+      } catch (e) {
+        el.innerHTML = '<span class="err">' + e.message + '</span>';
+        pre.textContent = e.message;
+      }
+    }
+    document.getElementById('refreshHealth').onclick = fetchHealth;
+
+    function renderTable(items, cols) {
+      if (!items || !items.length) return '<p class="empty">No items</p>';
+      let html = '<table><thead><tr>';
+      cols.forEach(c => { html += '<th>' + c.label + '</th>'; });
+      html += '</tr></thead><tbody>';
+      items.forEach(row => {
+        html += '<tr>';
+        cols.forEach(c => { html += '<td>' + (c.fn ? c.fn(row[c.key]) : (row[c.key] ?? '—')) + '</td>'; });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      return html;
+    }
+
+    async function loadTrends() {
+      const el = document.getElementById('trendsList');
+      el.innerHTML = '<p class="loading">Loading…</p>';
+      try {
+        const r = await fetch('/v1/trends/recent?limit=10', { headers: getHeaders() });
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        const j = await r.json();
+        const items = j.items || [];
+        el.innerHTML = renderTable(items, [
+          { key: 'platform', label: 'Platform' },
+          { key: 'topic', label: 'Topic' },
+          { key: 'score', label: 'Score' },
+          { key: 'stage', label: 'Stage' },
+        ]);
+      } catch (e) {
+        el.innerHTML = '<p class="err">' + e.message + '</p>';
+      }
+    }
+    document.getElementById('loadTrends').onclick = loadTrends;
+
+    document.getElementById('fetchTrends').onclick = async () => {
+      const btn = document.getElementById('fetchTrends');
+      btn.disabled = true;
+      try {
+        const r = await fetch('/v1/trends/candidates', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ topics: ['ai video'], platforms: ['tiktok'], limit: 5 }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || r.status);
+        await loadTrends();
+      } catch (e) {
+        alert(e.message);
+      }
+      btn.disabled = false;
+    };
+
+    async function loadScripts() {
+      const el = document.getElementById('scriptsList');
+      el.innerHTML = '<p class="loading">Loading…</p>';
+      try {
+        const r = await fetch('/v1/scripts/recent?limit=10', { headers: getHeaders() });
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        const j = await r.json();
+        const items = j.items || [];
+        el.innerHTML = renderTable(items, [
+          { key: 'ideaId', label: 'Idea ID' },
+          { key: 'platform', label: 'Platform' },
+          { key: 'title', label: 'Title' },
+        ]);
+      } catch (e) {
+        el.innerHTML = '<p class="err">' + e.message + '</p>';
+      }
+    }
+    document.getElementById('loadScripts').onclick = loadScripts;
+
+    document.getElementById('generateScripts').onclick = async () => {
+      const btn = document.getElementById('generateScripts');
+      btn.disabled = true;
+      try {
+        const r = await fetch('/v1/scripts/generate', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ ideas: [{ id: 'ui-1', platform: 'tiktok', title: 'Test', hook: 'Hook', template: 'story', trendScore: 0.8 }] }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || r.status);
+        await loadScripts();
+      } catch (e) {
+        alert(e.message);
+      }
+      btn.disabled = false;
+    };
+
+    async function loadJobs() {
+      const el = document.getElementById('jobsList');
+      el.innerHTML = '<p class="loading">Loading…</p>';
+      try {
+        const r = await fetch('/v1/pipeline/jobs?limit=10', { headers: getHeaders() });
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        const j = await r.json();
+        const items = j.items || [];
+        el.innerHTML = renderTable(items, [
+          { key: 'jobId', label: 'Job ID' },
+          { key: 'ideaId', label: 'Idea ID' },
+          { key: 'status', label: 'Status' },
+        ]);
+      } catch (e) {
+        el.innerHTML = '<p class="err">' + e.message + '</p>';
+      }
+    }
+    document.getElementById('loadJobs').onclick = loadJobs;
+
+    document.getElementById('enqueuePipeline').onclick = async () => {
+      const btn = document.getElementById('enqueuePipeline');
+      btn.disabled = true;
+      try {
+        const r = await fetch('/v1/pipeline/enqueue', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ scripts: [{ ideaId: 'ui-1', platform: 'tiktok', title: 'Test', hook: 'H', body: 'B', callToAction: 'CTA', caption: 'Cap' }] }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || r.status);
+        await loadJobs();
+      } catch (e) {
+        alert(e.message);
+      }
+      btn.disabled = false;
+    };
+
+    fetchHealth();
+  </script>
+</body>
+</html>
